@@ -1,0 +1,27 @@
+loop:
+  iters: 20
+  repeat_count: random
+  returns: void
+if:
+  repeat_count: random
+  returns: void
+recursion:
+  loops: 10
+  repeat_count: random
+  returns: int
+memory:
+  size: random
+  repeat_count: random
+  returns: void
+bitwise:
+  repeat_count: random
+  returns: void
+pointerArithmetic:
+  repeat_count: random
+  returns: void
+struct:
+  repeat_count: random
+  returns: void
+functionPointer:
+  repeat_count: random
+  returns: void

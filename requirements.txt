@@ -1,0 +1,15 @@
+strictyaml
+graphviz
+networkx
+pydot
+pygraphviz
+clang
+pandas
+numpy
+torch
+scikit-learn
+xgboost
+pytorch-tabnet
+matplotlib
+optuna
+catboost
