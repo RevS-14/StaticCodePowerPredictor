@@ -1,4 +1,6 @@
 # Templates for different code structures
+from extractors.feature_extracter import EXP_MATH_FUNC
+
 LOOP_TEMPLATE = """
 void loopFunction{idx}() {{
     int sum = 0;
@@ -12,10 +14,13 @@ void loopFunction{idx}() {{
 IF_TEMPLATE = """
 void ifFunction{idx}() {{
     int x = 1, y = 2;
+    int i=0;
+    for(i=0;i<10;i++){{
     if (x > y) {{
         x -= y;
     }} else {{
         y -= x;
+    }}
     }}
 }}
 """
@@ -34,21 +39,26 @@ void memoryFunction{idx}() {{
 BITWISE_TEMPLATE = """
 void bitwiseFunction{idx}() {{
     int reg = 0b00001111;
+    int i=0;
+    for(i=0;i<10;i++){{
     reg = reg | 1 << 5;  // Set bit 5
     reg = reg & ~(1 << 1); // Clear bit 1
     reg = reg ^ (1 << 2) ; // Toggle bit 2
+    }}
 }}
 """
 
 POINTER_ARITHMETIC = """
 void pointerArithmeticFunction{idx}() {{
     int a = 0;
+    int i = 0;
     int arr[10] = {{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
     int *ptr = arr;
-    printf("First element: %d\\n", *ptr);
+    for(i=0;i<10;i++)
+    {{
     ptr++;
-    printf("Second element: %d\\n", *ptr);
     ptr--;
+    }}
 }}
 """
 STRUCT_UNION_TEMPLATE = """
@@ -59,7 +69,6 @@ typedef struct {{
 
 void structFunction{idx}() {{
     SensorData{idx} s = {{1, 3.3}};
-    printf("Sensor ID: %d, Voltage: %.2f\\n", s.id, s.voltage);
 }}
 """
 
@@ -67,18 +76,32 @@ FUNCTION_POINTER_TEMPLATE = """
 typedef void (*Callback{idx})(int);
 
 void myFunction{idx}(int x) {{
-    printf("Callback called with value %d\\n", x);
+    return;
 }}
 
 void functionPointerFunction{idx}() {{
     Callback{idx} cb = myFunction{idx};
-    cb(42);
+    cb(10);
+}}
+"""
+
+EXPONENTIAL_MATH_TEMPLATE = """
+void exponentialMathFunction{idx}() {{
+    double base = 2.0;
+    double exponent = 3.0;
+    double result = pow(base, exponent);
+
+    int i = 0;
+    for (i = 0; i < 10; i++) {{
+        result = pow(result, 1.1);  // Apply exponential function iteratively
+    }}
 }}
 """
 
 MAIN_TEMPLATE = """
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 // Function declarations
 {declarations}
@@ -96,5 +119,6 @@ func_template_map = {
     "bitwise": BITWISE_TEMPLATE,
     "pointerArithmetic": POINTER_ARITHMETIC,
     "struct": STRUCT_UNION_TEMPLATE,
-    "functionPointer": FUNCTION_POINTER_TEMPLATE
+    "functionPointer": FUNCTION_POINTER_TEMPLATE,
+    "exponentialMath": EXPONENTIAL_MATH_TEMPLATE
 }

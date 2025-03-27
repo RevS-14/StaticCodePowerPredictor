@@ -25,3 +25,6 @@ struct:
 functionPointer:
   repeat_count: random
   returns: void
+exponentialMath:
+  repeat_count: random
+  returns: void

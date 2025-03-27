@@ -24,7 +24,7 @@ def generate_c_codes(file_index, yaml_data):
     main_code = MAIN_TEMPLATE.format(declarations="\n".join(declarations), function_calls="\n    ".join(calls))
     full_code = main_code + "\n".join(functions) + "\n"
 
-    filename = f"generated_c_files/generated_codes_{file_index}.c"
+    filename = f"generated_files/generated_codes_{file_index}.c"
     with open(filename, "w") as f:
         f.write(full_code)
 

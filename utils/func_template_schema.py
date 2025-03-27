@@ -35,5 +35,9 @@ yaml_schema = Map({
     "functionPointer": Map({
         "repeat_count": Any(),
         "returns": Str()
+    }),
+    "exponentialMath": Map({
+        "repeat_count": Any(),
+        "returns": Str()
     })
 })

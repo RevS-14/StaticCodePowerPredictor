@@ -1,20 +1,23 @@
 import csv
 import os
 
+import os
+import sys
+
+os.environ["LIBCLANG_PATH"] = "/opt/homebrew/Cellar/llvm/19.1.7_1/lib/libclang.dylib"
+
 import clang.cindex
+clang.cindex.Config.set_library_file(os.environ["LIBCLANG_PATH"])
 
 from extractors.power_extractor import compile_c_program, run_with_power_logging
 
-# Initialize Clang Index
-os.environ["LIBCLANG_PATH"] = r"/opt/homebrew/Cellar/llvm/19.1.7_1/lib/libclang.dylib"
-clang.cindex.Config.set_library_file(os.environ["LIBCLANG_PATH"])
 index = clang.cindex.Index.create()
 
 # Path to the directory containing C files
-C_FILES_DIR = "../generated_files"  # Change this to your folder containing C files
-OUTPUT_DIR = "../output"
+C_FILES_DIR = "generated_files"  # Change this to your folder containing C files
+OUTPUT_DIR = "output"
 # CSV file to store results
-OUTPUT_CSV = "power_dataset.csv"
+OUTPUT_CSV = "power_dataset_updated.csv"
 
 # Feature counters
 features = {
@@ -25,14 +28,14 @@ features = {
     "num_memory_allocations": 0,
     "num_pointer_operations": 0,
     "num_exp_math_operations": 0,
-    "power_mW": None
+    "power_mw": None
 }
 
 # Memory allocation functions
 MEMORY_FUNCS = {"malloc", "calloc", "realloc", "free"}
 LOOP_NODES = {clang.cindex.CursorKind.FOR_STMT, clang.cindex.CursorKind.WHILE_STMT, clang.cindex.CursorKind.DO_STMT}
 CONDITIONAL_NODES = {clang.cindex.CursorKind.IF_STMT, clang.cindex.CursorKind.CASE_STMT, clang.cindex.CursorKind.DEFAULT_STMT}
-EXP_MATH_FUNC = {"pow", "exp", "log", "sin", "cos", "tan", "sqrt"}
+EXP_MATH_FUNC = {"pow", "exp", "log", "sin", "cos", "tan", "sqrt", "__builtin_pow", "__builtin_exp"}
 
 
 def analyze_ast(node):
@@ -110,6 +113,23 @@ def extract_features():
                 exe_file = compile_c_program(c_path)
 
                 if exe_file:
-                    _, power_mw = run_with_power_logging(exe_file, c_file_count)
+                    _, power_mw = run_with_power_logging(exe_file)
                     features_map['power_mw'] = power_mw
+                c_file_count += 1
+                loader = _get_loader(c_file_count)
+                sys.stdout.write(f"\rFiles Processed: {c_file_count} - Yet to complete, Please wait...")  # Overwrites the same line
+                sys.stdout.flush()
                 csv_writer.writerow(features_map.values())
+        sys.stdout.write(f"\rFiles Processing completed. Total Files Processed: {c_file_count}")
+
+def _get_loader(file_count):
+    if (file_count % 4) == 0:
+        return "-"
+    elif (file_count % 4) == 1:
+        return "\\"
+    elif (file_count % 4) == 2:
+        return "/"
+    elif (file_count % 4) == 3:
+        return "-"
+
+
