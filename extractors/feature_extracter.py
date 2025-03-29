@@ -17,7 +17,7 @@ index = clang.cindex.Index.create()
 C_FILES_DIR = "generated_files"  # Change this to your folder containing C files
 OUTPUT_DIR = "output"
 # CSV file to store results
-OUTPUT_CSV = "power_dataset_updated.csv"
+OUTPUT_CSV = "power_dataset_10k_2.csv"
 
 # Feature counters
 features = {

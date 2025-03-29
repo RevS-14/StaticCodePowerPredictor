@@ -6,7 +6,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 # Paths
 C_FILES_DIR = "../generated_files"
-OUTPUT_CSV = "power_dataset.csv"
+OUTPUT_CSV = "power_dataset_5k.csv"
 NUM_WORKERS = os.cpu_count()  # Use all available CPU cores
 
 
