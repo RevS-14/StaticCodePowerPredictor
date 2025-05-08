@@ -13,9 +13,9 @@ def generate_c_codes(file_index, yaml_data):
 
     for idx, (func_name, args) in enumerate(yaml_data.items()):
         if func_name in func_template_map.keys():
-            repeat_count = args['repeat_count'] if not args['repeat_count'] == 'random' else random.randint(1, 10)
+            repeat_count = args['repeat_count'] if not args['repeat_count'] == 'random' else random.randint(1, 1000)
             return_type = args['returns']
-            filled_args = {k: (random.randint(1, 10) if v == "random" else v) for k, v in args.items()}
+            filled_args = {k: (random.randint(1, 1000) if v == "random" else v) for k, v in args.items()}
             for count in range(repeat_count):
                 functions.append(func_template_map[func_name].format(idx=count, **filled_args))
                 declarations.append(f"{return_type} {func_name}Function{count}();")

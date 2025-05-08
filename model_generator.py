@@ -1,84 +1,106 @@
-import argparse
+import os
 
 import numpy as np
 import pandas as pd
+import joblib
 import xgboost as xgb
+import torch
 from pytorch_tabnet.tab_model import TabNetRegressor
-from sklearn.model_selection import KFold
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
-# Load dataset
-def train_power_predictor_model(dataset_file):
-    df = pd.read_csv(dataset_file)
+# Load New Dataset
+new_file_path = "output/power_dataset_verify.csv"  # Update with your new dataset path
+new_df = pd.read_csv(new_file_path)
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
 
-    # Assume last column is target
-    X = df.iloc[:, :-1].values  # Features
-    y = df.iloc[:, -1].values   # Target
+# Data Preprocessing (Same steps as training)
+new_df["power_mW"] = new_df["power_mW"].round().astype(int)
+for col in new_df.select_dtypes(include=['object']).columns:
+    try:
+        new_df[col] = pd.to_numeric(new_df[col], errors='ignore')
+    except:
+        pass
 
-    # Standardize features
-    scaler = StandardScaler()
-    X = scaler.fit_transform(X)
+# Feature Scaling (Use the same scaler from training)
+from sklearn.preprocessing import MinMaxScaler
+# scaler = joblib.load("resources/scaler.pkl")  # Load the same scaler used for training
+# numeric_cols = new_df.select_dtypes(include=['number']).columns
+# new_df[numeric_cols] = scaler.transform(new_df[numeric_cols])
 
-    # Define K-Fold Cross-Validation
-    k = 5  # Number of folds
-    kf = KFold(n_splits=k, shuffle=True, random_state=42)
+# Extract Features & Target
+X_new = new_df.iloc[10:20, :-1].values  # Select only first 100 rows for features
+y_new = new_df.iloc[10:20, -1].values   # Select only first 100 rows for actual target values
 
-    # Store results
-    xgb_mse_list = []
-    tabnet_mse_list = []
-    ensemble_mse_list = []
 
-    for train_idx, val_idx in kf.split(X):
-        X_train, X_val = X[train_idx], X[val_idx]
-        y_train, y_val = y[train_idx], y[val_idx]
+print(f"saipavan {X_new.shape[1]}")
+# Load Trained Models
+xgb_model = xgb.Booster()
+xgb_model.load_model("trained_models/xgb_model.json")
+tabnet_model = TabNetRegressor()
+tabnet_model.load_model("trained_models/tabnet_model.zip")
+tabnet_model.device = "cpu"  # Force CPU execution
+torch.cuda.empty_cache()
 
-        # Train XGBoost
-        dtrain = xgb.DMatrix(X_train, label=y_train)
-        dval = xgb.DMatrix(X_val, label=y_val)
+# Make Predictions
+dnew = xgb.DMatrix(X_new)
+y_pred_xgb = xgb_model.predict(dnew)
+y_pred_tabnet = tabnet_model.predict(X_new).flatten()
 
-        xgb_params = {
-            "objective": "reg:squarederror",
-            "eval_metric": "rmse",
-            "learning_rate": 0.05,
-            "max_depth": 6,
-            "subsample": 0.8,
-            "colsample_bytree": 0.8,
-        }
-        xgb_model = xgb.train(xgb_params, dtrain, num_boost_round=100)
-        y_pred_xgb = xgb_model.predict(dval)
+# Weighted Ensemble Prediction
+alpha = 0.7  # XGBoost weight
+beta = 0.3   # TabNet weight
+y_pred_final = (alpha * y_pred_xgb) + (beta * y_pred_tabnet)
 
-        # Train Pretrained TabNet Model
-        tabnet_model = TabNetRegressor(verbose=0)
-        tabnet_model.fit(X_train, y_train.reshape(-1, 1), max_epochs=50, patience=10, batch_size=128, virtual_batch_size=32)
+print(f"predicted values: {y_pred_final}, original values: {y_new}")
 
-        y_pred_tabnet = tabnet_model.predict(X_val).flatten()
+# --------- Model Evaluation Metrics ---------
+def evaluate_model(y_true, y_pred, model_name):
+    mse = mean_squared_error(y_true, y_pred)
+    mae = mean_absolute_error(y_true, y_pred)
+    r2 = r2_score(y_true, y_pred)
+    mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100  # Mean Absolute Percentage Error
 
-        # Weighted Ensemble Prediction
-        alpha = 0.7  # XGBoost weight
-        beta = 0.3   # TabNet weight
-        y_pred_final = (alpha * y_pred_xgb) + (beta * y_pred_tabnet)
+    print(f"\n📊 {model_name} Performance on New Data:")
+    print(f"MSE: {mse:.4f}")
+    print(f"MAE: {mae:.4f}")
+    print(f"R² Score: {r2:.4f}")
+    print(f"MAPE: {mape:.2f}%")
 
-        # Evaluate Performance
-        mse_xgb = mean_squared_error(y_val, y_pred_xgb)
-        mse_tabnet = mean_squared_error(y_val, y_pred_tabnet)
-        mse_final = mean_squared_error(y_val, y_pred_final)
+evaluate_model(y_new, y_pred_xgb, "XGBoost")
+evaluate_model(y_new, y_pred_tabnet, "TabNet")
+evaluate_model(y_new, y_pred_final, "Ensemble Model")
 
-        xgb_mse_list.append(mse_xgb)
-        tabnet_mse_list.append(mse_tabnet)
-        ensemble_mse_list.append(mse_final)
+# --------- Visualization ---------
 
-    # Print Cross-Validation Results
-    print(f"🔹 XGBoost Avg MSE: {np.mean(xgb_mse_list):.4f} ± {np.std(xgb_mse_list):.4f}")
-    print(f"🔹 TabNet Avg MSE: {np.mean(tabnet_mse_list):.4f} ± {np.std(tabnet_mse_list):.4f}")
-    print(f"🔹 Ensemble Model Avg MSE: {np.mean(ensemble_mse_list):.4f} ± {np.std(ensemble_mse_list):.4f}")
+plt.figure(figsize=(10, 6))
+plt.scatter(y_new, y_pred_final, alpha=0.5, color='blue', label="Predicted vs Actual")
+max_val = max(max(y_new), max(y_pred_final))
+plt.plot([0, max_val], [0, max_val], linestyle='--', color='red', label="Ideal Prediction Line")
+plt.xlabel("Actual Power (mW)")
+plt.ylabel("Predicted Power (mW)")
+plt.title("Actual vs Predicted Power Consumption (New Data)")
+plt.legend()
+plt.grid(True)
+plt.show()
 
-def __main__():
-    parser = argparse.ArgumentParser(description="Process user information.")
-    parser.add_argument("dataset", type=str, help="power predictor data set")
+# Error Histogram
+errors = y_new - y_pred_final
+plt.figure(figsize=(10, 5))
+plt.hist(errors, bins=30, color='purple', alpha=0.7)
+plt.xlabel("Prediction Error")
+plt.ylabel("Frequency")
+plt.title("Error Distribution (New Data)")
+plt.grid(True)
+plt.show()
 
-    args = parser.parse_args()
-
-    dataset = args.dataset
-    train_power_predictor_model(dataset)
-    print("Model training completed :)")
+# Residual Plot
+plt.figure(figsize=(10, 6))
+plt.scatter(y_pred_final, errors, alpha=0.5, color='green')
+plt.axhline(y=0, color='red', linestyle='--')
+plt.xlabel("Predicted Power (mW)")
+plt.ylabel("Residual Error")
+plt.title("Residual Plot (New Data)")
+plt.grid(True)
+plt.show()

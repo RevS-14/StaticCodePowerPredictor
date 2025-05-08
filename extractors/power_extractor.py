@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import time
 import csv
@@ -22,8 +23,42 @@ def compile_c_program(c_file):
         print(f"Compilation failed for {c_file}: {e}")
         return None
 
+def extract_power_consumption(log_file, target_freq=1000, alpha=2.0):
+    """Extracts CPU power values, normalizes with frequency, and ensures consistency."""
+    try:
+        with open(log_file, "r") as f:
+            lines = f.readlines()
 
-def extract_power_consumption(log_file):
+        cpu_power_values = []
+        cpu_freq_values = []
+
+        for line in lines:
+            cpu_power_match = re.search(r"CPU Power:\s*([\d.]+)\s*mW", line)
+            cpu_freq_match = re.search(r"CPU \d+ frequency:\s*([\d.]+)\s*MHz", line)
+
+            if cpu_power_match:
+                cpu_power_values.append(float(cpu_power_match.group(1)))
+
+            if cpu_freq_match:
+                cpu_freq_values.append(float(cpu_freq_match.group(1)))
+
+        if not cpu_power_values or not cpu_freq_values:
+            raise ValueError("Missing CPU power or frequency values in the log.")
+
+        # Compute averages
+        avg_cpu_power = sum(cpu_power_values) / len(cpu_power_values)
+        avg_cpu_freq = sum(cpu_freq_values) / len(cpu_freq_values)
+
+        # Normalize power using frequency scaling
+        norm_cpu_power = avg_cpu_power * (target_freq / avg_cpu_freq) ** alpha
+
+        return int(norm_cpu_power)
+
+    except Exception as e:
+        print(f"Error extracting CPU power: {e}")
+        return None
+
+def extract_power_consumption_old(log_file):
     """Parses the power log file and extracts average power consumption."""
     try:
         with open(log_file, "r") as f:
@@ -40,7 +75,7 @@ def extract_power_consumption(log_file):
         return None
 
 
-def run_with_power_logging(exe_file):
+def run_with_power_logging_old(exe_file):
     """Runs the compiled executable while capturing power consumption."""
     power_log_file = f"power_log.txt"
 
@@ -68,6 +103,41 @@ def run_with_power_logging(exe_file):
     power_mw = extract_power_consumption(power_log_file)
     return execution_time, power_mw
 
+
+import subprocess
+import os
+import time
+import signal
+
+
+def run_with_power_logging(exe_file):
+    """Runs the compiled executable while capturing power consumption more accurately."""
+    power_log_file = "power_log.txt"
+
+    # Start powermetrics with better synchronization
+    power_cmd = f"sudo powermetrics --samplers cpu_power -i 200 > {power_log_file}"  # 200ms interval for finer granularity
+    power_proc = subprocess.Popen(power_cmd, shell=True, preexec_fn=os.setpgrp)
+
+    time.sleep(2)  # Allow power logging to start properly
+
+    start_time = time.time()
+    try:
+        subprocess.run(["./" + exe_file], check=True, timeout=10)  # Execute program
+    except subprocess.CalledProcessError as e:
+        print(f"Execution failed for {exe_file}: {e}")
+        return None, None
+    except subprocess.TimeoutExpired:
+        print(f"Execution timed out for {exe_file}")
+        return None, None
+    end_time = time.time()
+    execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
+
+    # Stop powermetrics cleanly
+    os.killpg(os.getpgid(power_proc.pid), signal.SIGTERM)  # Kill process group
+
+    time.sleep(1)  # Allow logs to flush
+    power_mw = extract_power_consumption(power_log_file)
+    return execution_time, power_mw
 
 def process_c_file(c_file):
     """Processes a single C file: compile, execute, measure power, and return results."""
