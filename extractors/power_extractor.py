@@ -111,33 +111,64 @@ import signal
 
 
 def run_with_power_logging(exe_file):
-    """Runs the compiled executable while capturing power consumption more accurately."""
-    power_log_file = "power_log.txt"
+    """Runs the compiled executable while capturing net power consumption (active - idle)."""
 
-    # Start powermetrics with better synchronization
-    power_cmd = f"sudo powermetrics --samplers cpu_power -i 200 > {power_log_file}"  # 200ms interval for finer granularity
+    idle_log_before = "idle_power_log_before.txt"
+    active_log = "active_power_log.txt"
+    idle_log_after = "idle_power_log_after.txt"
+
+
+    def record_power(filename, duration=3):
+        cmd = f"sudo powermetrics --samplers cpu_power -i 200 > {filename}"
+        proc = subprocess.Popen(cmd, shell=True, preexec_fn=os.setpgrp)
+        time.sleep(duration)
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        time.sleep(1)  # Allow logs to flush
+
+    # Step 1: Record idle power
+    #
+    # print("[*] Recording idle power before start...")
+    record_power(idle_log_before, duration=3)
+
+    # Step 2: Start power logging and program execution
+    # print("[*] Running program and recording active power...")
+    power_cmd = f"sudo powermetrics --samplers cpu_power -i 100 > {active_log}"
     power_proc = subprocess.Popen(power_cmd, shell=True, preexec_fn=os.setpgrp)
-
-    time.sleep(2)  # Allow power logging to start properly
+    time.sleep(1.5)  # Allow powermetrics to start
 
     start_time = time.time()
     try:
-        subprocess.run(["./" + exe_file], check=True, timeout=10)  # Execute program
+        subprocess.run(["./" + exe_file], check=True, timeout=10)
     except subprocess.CalledProcessError as e:
-        print(f"Execution failed for {exe_file}: {e}")
+        # print(f"[!] Execution failed for {exe_file}: {e}")
+        os.killpg(os.getpgid(power_proc.pid), signal.SIGTERM)
         return None, None
     except subprocess.TimeoutExpired:
-        print(f"Execution timed out for {exe_file}")
+        # print(f"[!] Execution timed out for {exe_file}")
+        os.killpg(os.getpgid(power_proc.pid), signal.SIGTERM)
         return None, None
     end_time = time.time()
-    execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
+    execution_time = (end_time - start_time) * 1000  # in ms
 
-    # Stop powermetrics cleanly
-    os.killpg(os.getpgid(power_proc.pid), signal.SIGTERM)  # Kill process group
+    # Stop power logging
+    os.killpg(os.getpgid(power_proc.pid), signal.SIGTERM)
+    time.sleep(1)  # Let powermetrics flush
 
-    time.sleep(1)  # Allow logs to flush
-    power_mw = extract_power_consumption(power_log_file)
-    return execution_time, power_mw
+    # print("[*] Recording idle power after start...")
+    record_power(idle_log_after, duration=3)
+
+    # Step 3: Compute net power
+    idle_power_before = extract_power_consumption(idle_log_before)
+    active_power = extract_power_consumption(active_log)
+    idle_power_after = extract_power_consumption(idle_log_after)
+
+    if idle_power_before is not None and active_power is not None and idle_power_after is not None:
+        baseline_power =(idle_power_before + idle_power_after)/2
+        net_power = max(active_power - baseline_power, 0)
+    else:
+        net_power = None
+
+    return execution_time, net_power
 
 def process_c_file(c_file):
     """Processes a single C file: compile, execute, measure power, and return results."""

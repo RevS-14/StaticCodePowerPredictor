@@ -161,7 +161,7 @@ import numpy as np
 C_FILES_DIR = "generated_files"  # Change this to your folder containing C files
 OUTPUT_DIR = "output"
 # CSV file to store results
-OUTPUT_CSV = "power_dataset_last.csv"
+OUTPUT_CSV = "power_dataset_may_11.csv"
 
 # Feature counters
 def init_features():
